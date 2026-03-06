@@ -14,6 +14,7 @@ FetchContent_Declare(
  GIT_REPOSITORY https://github.com/webview/webview
  GIT_TAG 0.12.0
 )
+
 FetchContent_Declare(
  nlohmann_json
  GIT_REPOSITORY https://github.com/nlohmann/json
@@ -25,7 +26,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 add_executable(app-mvp src/main.cpp src/App.cpp)
 
-target_link_libraries(app-mvp PRIVATE webview::core)
+target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json)
 
 set_property(TARGET app-mvp PROPERTY CXX_STANDARD 17)
 set_property(TARGET app-mvp PROPERTY CXX_STANDARD_REQUIRED ON)

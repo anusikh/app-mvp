@@ -1,10 +1,34 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 
+declare global {
+  interface Window {
+    testCppToJs?: (data: unknown) => void;
+  }
+}
+
+
 function App() {
   const [count, setCount] = useState(0)
+
+  const callJsToCpp = async () => {
+      const payload = JSON.stringify({"test":"123"});
+      const res = await (window as any).testJsToCpp(payload);
+      console.log(res["result"]);
+  } 
+
+  
+useEffect(() => {
+  window.testCppToJs = (data: unknown) => {
+    console.log(data);
+  };
+
+  return () => {
+    window.testCppToJs = undefined;
+  };
+}, []);
 
   return (
     <>
@@ -21,6 +45,12 @@ function App() {
         <button onClick={() => setCount((count) => count + 1)}>
           count is {count}
         </button>
+        <button onClick={async () => {
+          await callJsToCpp();
+        }}>
+          click
+        </button>
+
         <p>
           Edit <code>src/App.tsx</code> and save to test HMR
         </p>

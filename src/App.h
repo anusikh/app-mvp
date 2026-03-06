@@ -9,5 +9,7 @@ class App {
   public:
     App();
     void setupWindow();
+    void setupJsToCpp();
+    void testCppToJs();
     void run();
 };
