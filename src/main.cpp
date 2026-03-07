@@ -1,21 +1,35 @@
-#include "App.h"
 #include <webview/webview.h>
-#include <thread>
+
+#include <atomic>
 #include <chrono>
+#include <thread>
 
-int main() {
-   App app;
-   
-  // calls function in 10 seconds
-   std::thread delayedCaller([&app]() {
-       std::this_thread::sleep_for(std::chrono::seconds(10));
-       app.testCppToJs();
-   });
+#include "App.h"
 
-   app.run();
+int main()
+{
+  App app;
+  std::atomic<bool> uiOpen{true};
 
-   if (delayedCaller.joinable()) {
-       delayedCaller.join();
-   }
-   return 0;
+  // call jsFn after 10 seconds, only if UI running
+  // but only if the UI is still running.
+  std::thread delayedCaller(
+      [&app, &uiOpen]()
+      {
+        std::this_thread::sleep_for(std::chrono::seconds(10));
+        if (uiOpen.load())
+        {
+          app.testCppToJs();
+        }
+      });
+
+  app.run();
+  uiOpen = false;
+
+  if (delayedCaller.joinable())
+  {
+    delayedCaller.join();
+  }
+
+  return 0;
 }
