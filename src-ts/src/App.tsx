@@ -1,53 +1,55 @@
-import { useEffect, useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from 'react';
+import reactLogo from './assets/react.svg';
+import viteLogo from '/vite.svg';
+import './App.css';
 
 declare global {
   interface Window {
     testCppToJs?: (data: unknown) => void;
+    testJsToCpp?: (data: unknown) => Promise<unknown>;
   }
 }
 
-
 function App() {
-  const [count, setCount] = useState(0)
+  const [count, setCount] = useState(0);
 
   const callJsToCpp = async () => {
-      const payload = JSON.stringify({"test":"123"});
-      const res = await (window as any).testJsToCpp(payload);
-      console.log(res["result"]);
-  } 
-
-  
-useEffect(() => {
-  window.testCppToJs = (data: unknown) => {
-    console.log(data);
+    const payload = JSON.stringify({ test: '123' });
+    const res = await window?.testJsToCpp?.(payload);
+    console.log(res);
   };
 
-  return () => {
-    window.testCppToJs = undefined;
-  };
-}, []);
+  useEffect(() => {
+    window.testCppToJs = (data: unknown) => {
+      console.log(data);
+    };
+
+    return () => {
+      window.testCppToJs = undefined;
+    };
+  }, []);
 
   return (
     <>
       <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
+        <a href='https://vite.dev' target='_blank'>
+          <img src={viteLogo} className='logo' alt='Vite logo' />
         </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
+        <a href='https://react.dev' target='_blank'>
+          <img src={reactLogo} className='logo react' alt='React logo' />
         </a>
       </div>
       <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <button onClick={async () => {
-          await callJsToCpp();
-        }}>
+      <div className='card'>
+        <button onClick={() => setCount((count) => count + 1)}>count is {count}</button>
+
+        <div> - </div>
+
+        <button
+          onClick={async () => {
+            await callJsToCpp();
+          }}
+        >
           click
         </button>
 
@@ -55,11 +57,9 @@ useEffect(() => {
           Edit <code>src/App.tsx</code> and save to test HMR
         </p>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      <p className='read-the-docs'>Click on the Vite and React logos to learn more</p>
     </>
-  )
+  );
 }
 
-export default App
+export default App;

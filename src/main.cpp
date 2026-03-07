@@ -1,35 +1,45 @@
 #include <webview/webview.h>
 
-#include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
 #include <thread>
 
 #include "App.h"
 
 int main()
 {
-  App app;
-  std::atomic<bool> uiOpen{true};
+  auto app = std::make_shared<App>();
 
-  // call jsFn after 10 seconds, only if UI running
-  // but only if the UI is still running.
-  std::thread delayedCaller(
-      [&app, &uiOpen]()
+  bool task_ready = false;
+  std::condition_variable cv;
+  std::mutex cv_mutex;
+
+  // 2 threads only to simulate cpp to js ops
+  std::thread timer_thread(
+      [&]()
       {
         std::this_thread::sleep_for(std::chrono::seconds(10));
-        if (uiOpen.load())
         {
-          app.testCppToJs();
+          std::lock_guard<std::mutex> lock(cv_mutex);
+          task_ready = true;
         }
+        cv.notify_one();
       });
 
-  app.run();
-  uiOpen = false;
+  std::thread worker_thread(
+      [&]()
+      {
+        std::unique_lock<std::mutex> lock(cv_mutex);
+        cv.wait(lock, [&]() { return task_ready; });
+        app->testCppToJs();
+      });
 
-  if (delayedCaller.joinable())
-  {
-    delayedCaller.join();
-  }
+  app->run();
+
+  if (timer_thread.joinable()) timer_thread.join();
+  if (worker_thread.joinable()) worker_thread.join();
 
   return 0;
 }
