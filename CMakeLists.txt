@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
+if(APPLE)
+project(app-mvp LANGUAGES CXX OBJCXX)
+else()
 project(app-mvp LANGUAGES CXX)
+endif()
+
 if(NOT CMAKE_BUILD_TYPE)
 set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -24,9 +29,17 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(webview)
 FetchContent_MakeAvailable(nlohmann_json)
 
+if(APPLE)
+add_executable(app-mvp src/main.cpp src/App.cpp src/WindowProtection.mm)
+else()
 add_executable(app-mvp src/main.cpp src/App.cpp)
+endif()
 
+if(APPLE)
+target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json "-framework AppKit")
+else()
 target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json)
+endif()
 
 set_property(TARGET app-mvp PROPERTY CXX_STANDARD 17)
 set_property(TARGET app-mvp PROPERTY CXX_STANDARD_REQUIRED ON)

@@ -4,12 +4,23 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 
+#ifdef __APPLE__
+#include "WindowProtection.h"
+#endif
 #include "webview/webview.h"
 
 App::App() : w(true, nullptr)
 {
   setupWindow();
   setupJsToCpp();
+
+#ifdef __APPLE__
+  auto windowResult = w.window();
+  if (windowResult.ok())
+  {
+    setWindowProtected(windowResult.value());
+  }
+#endif
 }
 
 void utilFn(webview::webview* w)
@@ -47,7 +58,6 @@ void App::setupWindow()
     w.set_title("app-mvp");
     w.set_size(1200, 800, WEBVIEW_HINT_NONE);
     std::string res = (std::filesystem::current_path() / "src-ts/dist/index.html").string();
-
     w.navigate("file://" + res);
   }
   catch (const webview::exception& e)

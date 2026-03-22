@@ -1,5 +1,4 @@
 #pragma once
-
 #include "webview/webview.h"
 
 class App
