@@ -1,27 +1,28 @@
 import { useEffect, useState } from 'react';
-import reactLogo from './assets/react.svg';
-import viteLogo from '/vite.svg';
 import './App.css';
+import { useMicRecorder } from './hooks/useMicRecorder';
 
 declare global {
   interface Window {
-    testCppToJs?: (data: unknown) => void;
+    testCppToJs?: (data: { output: string }) => void;
     testJsToCpp?: (data: unknown) => Promise<unknown>;
+    stt?: (data: unknown) => Promise<unknown>;
   }
 }
 
 function App() {
-  const [count, setCount] = useState(0);
+  const { start, stop, sendAudioData } = useMicRecorder();
+  const [text, setText] = useState<string>('');
 
-  const callJsToCpp = async () => {
-    const payload = JSON.stringify({ test: '123' });
-    const res = await window?.testJsToCpp?.(payload);
-    console.log(res);
-  };
+  // const callJsToCpp = async () => {
+  //   const payload = JSON.stringify({ test: '123' });
+  //   const res = await window?.testJsToCpp?.(payload);
+  //   console.log(res);
+  // };
 
   useEffect(() => {
-    window.testCppToJs = (data: unknown) => {
-      console.log(data);
+    window.testCppToJs = (data: { output: string }) => {
+      setText(data['output']);
     };
 
     return () => {
@@ -30,35 +31,13 @@ function App() {
   }, []);
 
   return (
-    <>
-      <div>
-        <a href='https://vite.dev' target='_blank'>
-          <img src={viteLogo} className='logo' alt='Vite logo' />
-        </a>
-        <a href='https://react.dev' target='_blank'>
-          <img src={reactLogo} className='logo react' alt='React logo' />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className='card'>
-        <button onClick={() => setCount((count) => count + 1)}>count is {count}</button>
+    <div>
+      <button onClick={start}>start</button>
+      <button onClick={stop}>stop</button>
+      <button onClick={sendAudioData}>transcribe</button>
 
-        <div> - </div>
-
-        <button
-          onClick={async () => {
-            await callJsToCpp();
-          }}
-        >
-          click
-        </button>
-
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className='read-the-docs'>Click on the Vite and React logos to learn more</p>
-    </>
+      <p>{text}</p>
+    </div>
   );
 }
 

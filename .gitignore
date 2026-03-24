@@ -1,5 +1,6 @@
 .cache
 build
+models
 
 # Logs
 logs

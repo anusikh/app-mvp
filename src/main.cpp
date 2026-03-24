@@ -1,10 +1,10 @@
 #include <webview/webview.h>
 
-#include <chrono>
-#include <condition_variable>
+// #include <chrono>
+// #include <condition_variable>
 #include <memory>
-#include <mutex>
-#include <thread>
+// #include <mutex>
+// #include <thread>
 
 #include "App.h"
 
@@ -12,6 +12,7 @@ int main()
 {
   auto app = std::make_shared<App>();
 
+  /*
   bool task_ready = false;
   std::condition_variable cv;
   std::mutex cv_mutex;
@@ -35,11 +36,14 @@ int main()
         cv.wait(lock, [&]() { return task_ready; });
         app->testCppToJs();
       });
+      */
 
   app->run();
 
-  if (timer_thread.joinable()) timer_thread.join();
-  if (worker_thread.joinable()) worker_thread.join();
+  /*
+    if (timer_thread.joinable()) timer_thread.join();
+    if (worker_thread.joinable()) worker_thread.join();
+    */
 
   return 0;
 }

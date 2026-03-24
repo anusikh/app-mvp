@@ -26,19 +26,42 @@ FetchContent_Declare(
  GIT_TAG v3.11.3
 )
 
-FetchContent_MakeAvailable(webview)
-FetchContent_MakeAvailable(nlohmann_json)
+FetchContent_Declare(
+ whisper
+ GIT_REPOSITORY https://github.com/ggerganov/whisper.cpp.git
+ GIT_TAG master
+)
+
+set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+
+# optimziations for whisper.cpp
+set(WHISPER_NO_AVX OFF CACHE BOOL "" FORCE)
+set(WHISPER_NO_AVX2 OFF CACHE BOOL "" FORCE)
+set(WHISPER_NO_FMA OFF CACHE BOOL "" FORCE)
 
 if(APPLE)
-add_executable(app-mvp src/main.cpp src/App.cpp src/WindowProtection.mm)
+set(WHISPER_METAL ON CACHE BOOL "" FORCE)
 else()
-add_executable(app-mvp src/main.cpp src/App.cpp)
+# CUDA
+set(WHISPER_CUBLAS ON CACHE BOOL "" FORCE)
+endif()
+
+FetchContent_MakeAvailable(webview)
+FetchContent_MakeAvailable(nlohmann_json)
+FetchContent_MakeAvailable(whisper)
+
+if(APPLE)
+add_executable(app-mvp src/main.cpp src/App.cpp src/WindowProtection.mm src/Stt.cpp)
+else()
+add_executable(app-mvp src/main.cpp src/App.cpp src/Stt.cpp)
 endif()
 
 if(APPLE)
-target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json "-framework AppKit")
+target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json "-framework AppKit" whisper)
 else()
-target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json)
+target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json whisper)
 endif()
 
 set_property(TARGET app-mvp PROPERTY CXX_STANDARD 17)
