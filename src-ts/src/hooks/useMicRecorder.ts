@@ -1,5 +1,19 @@
 import { useRef } from 'react';
 
+const BASE64_CHUNK_SIZE = 0x8000;
+
+const arrayBufferToBase64 = (buffer: ArrayBufferLike) => {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+
+  for (let index = 0; index < bytes.length; index += BASE64_CHUNK_SIZE) {
+    const chunk = bytes.subarray(index, index + BASE64_CHUNK_SIZE);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+};
+
 export const useMicRecorder = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
@@ -75,14 +89,24 @@ export const useMicRecorder = () => {
   };
 
   const sendAudioData = async () => {
+    if (!window.stt) {
+      throw new Error('Speech-to-text bridge is unavailable.');
+    }
+
+    if (chunksRef.current.length === 0) {
+      throw new Error('No recorded audio available to transcribe.');
+    }
+
     const merged = mergeBuffers(chunksRef.current);
+    if (merged.length === 0) {
+      chunksRef.current = [];
+      throw new Error('Recorded audio was empty.');
+    }
+
     const downsampled = downSample(merged, sampleRateRef.current, 16000);
     chunksRef.current = [];
-
-    console.log(downsampled.buffer);
-
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(downsampled.buffer)));
-    await window.stt?.(base64);
+    const base64 = arrayBufferToBase64(downsampled.buffer);
+    await window.stt(base64);
   };
 
   return { start, stop, sendAudioData };

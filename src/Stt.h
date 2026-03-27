@@ -6,7 +6,7 @@
 class Stt
 {
  private:
-  whisper_context* ctx;
+  whisper_context* ctx = nullptr;
 
  public:
   Stt();

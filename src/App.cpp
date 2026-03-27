@@ -1,5 +1,7 @@
 #include "App.h"
 
+#include <httplib.h>
+
 #include <cstring>
 #include <filesystem>
 #include <iostream>
@@ -62,15 +64,21 @@ App::App() : w(true, nullptr), stt()
   setupWindow();
   setupJsToCpp();
 
-  stt.initWhisper("models/ggml-base.en.bin");
+  stt.initWhisper(resolveModelPath());
 
 #ifdef __APPLE__
   auto windowResult = w.window();
   if (windowResult.ok())
   {
     setWindowProtected(windowResult.value());
+    configureWindowForMicrophone(windowResult.value());
   }
 #endif
+}
+
+App::~App()
+{
+  stopAssetServer();
 }
 
 void App::setupJsToCpp()
@@ -87,18 +95,26 @@ void App::setupJsToCpp()
   w.bind("stt",
          [this](std::string json_from_js) -> std::string
          {
-           auto data = nlohmann::json::parse(json_from_js);
-           std::string base64 = data[0];
+           try
+           {
+             auto data = nlohmann::json::parse(json_from_js);
+             std::string base64 = data[0];
 
-           auto audio = base64ToFloat32(base64);
-           std::string result = stt.runWhisper(audio);
+             auto audio = base64ToFloat32(base64);
+             std::string result = stt.runWhisper(audio);
 
-           std::cout << result << std::endl;
-           nlohmann::json obj = {{"output", result}};
+             std::cout << result << std::endl;
+             nlohmann::json obj = {{"output", result}};
 
-           w.eval("window.testCppToJs(" + obj.dump() + ")");
+             w.eval("window.testCppToJs(" + obj.dump() + ")");
 
-           return result;
+             return obj.dump();
+           }
+           catch (const std::exception& e)
+           {
+             std::cerr << "stt bridge error: " << e.what() << std::endl;
+             return nlohmann::json({{"error", e.what()}}).dump();
+           }
          });
 }
 
@@ -111,9 +127,18 @@ void App::setupWindow()
 {
   try
   {
+    startAssetServer();
+
     w.set_title("app-mvp");
     w.set_size(1200, 800, WEBVIEW_HINT_NONE);
-    std::string res = (std::filesystem::current_path() / "src-ts/dist/index.html").string();
+
+    if (assetServerPort > 0)
+    {
+      w.navigate("http://127.0.0.1:" + std::to_string(assetServerPort) + "/index.html");
+      return;
+    }
+
+    std::string res = (std::filesystem::path(resolveFrontendRoot()) / "index.html").string();
     w.navigate("file://" + res);
   }
   catch (const webview::exception& e)
@@ -125,4 +150,108 @@ void App::setupWindow()
 void App::run()
 {
   w.run();
+}
+
+std::string App::resolveFrontendRoot() const
+{
+  namespace fs = std::filesystem;
+
+#ifdef __APPLE__
+  auto bundleResources = getBundleResourcePath();
+  if (!bundleResources.empty())
+  {
+    fs::path bundleDist = fs::path(bundleResources) / "dist";
+    if (fs::exists(bundleDist / "index.html"))
+    {
+      return bundleDist.string();
+    }
+  }
+#endif
+
+  fs::path cwdDist = fs::current_path() / "src-ts/dist";
+  if (fs::exists(cwdDist / "index.html"))
+  {
+    return cwdDist.string();
+  }
+
+  fs::path buildDist = fs::current_path() / "dist";
+  if (fs::exists(buildDist / "index.html"))
+  {
+    return buildDist.string();
+  }
+
+  throw std::runtime_error("Unable to locate frontend dist directory.");
+}
+
+std::string App::resolveModelPath() const
+{
+  namespace fs = std::filesystem;
+
+#ifdef __APPLE__
+  auto bundleResources = getBundleResourcePath();
+  if (!bundleResources.empty())
+  {
+    fs::path bundledModel = fs::path(bundleResources) / "models/ggml-base.en.bin";
+    if (fs::exists(bundledModel))
+    {
+      return bundledModel.string();
+    }
+  }
+#endif
+
+  fs::path cwdModel = fs::current_path() / "models/ggml-base.en.bin";
+  if (fs::exists(cwdModel))
+  {
+    return cwdModel.string();
+  }
+
+  throw std::runtime_error("Unable to locate whisper model file.");
+}
+
+void App::startAssetServer()
+{
+  if (assetServerPort > 0)
+  {
+    return;
+  }
+
+  const auto frontendRoot = resolveFrontendRoot();
+
+  assetServer = std::make_unique<httplib::Server>();
+  if (!assetServer->set_mount_point("/", frontendRoot))
+  {
+    throw std::runtime_error("Failed to mount frontend dist directory.");
+  }
+
+  assetServerPort = assetServer->bind_to_any_port("127.0.0.1", 0);
+  if (assetServerPort <= 0)
+  {
+    assetServer.reset();
+    throw std::runtime_error("Failed to bind local asset server.");
+  }
+
+  assetServerThread = std::thread(
+      [this]()
+      {
+        if (assetServer)
+        {
+          assetServer->listen_after_bind();
+        }
+      });
+}
+
+void App::stopAssetServer()
+{
+  if (assetServer)
+  {
+    assetServer->stop();
+  }
+
+  if (assetServerThread.joinable())
+  {
+    assetServerThread.join();
+  }
+
+  assetServer.reset();
+  assetServerPort = 0;
 }

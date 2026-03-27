@@ -35,13 +35,27 @@ void Stt::initWhisper(const std::string& modelPath)
 
 std::string Stt::runWhisper(const std::vector<float>& audio)
 {
+  if (!ctx)
+  {
+    throw std::runtime_error("whisper context is not initialized");
+  }
+
+  if (audio.empty())
+  {
+    return "";
+  }
+
   whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
 
   // params.print_progress = false;
   // params.print_realtime = false;
   // params.print_timestamps = false;
 
-  whisper_full(ctx, params, audio.data(), audio.size());
+  const int resultCode = whisper_full(ctx, params, audio.data(), audio.size());
+  if (resultCode != 0)
+  {
+    throw std::runtime_error("whisper transcription failed");
+  }
 
   std::string result;
 

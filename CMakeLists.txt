@@ -32,6 +32,12 @@ FetchContent_Declare(
  GIT_TAG master
 )
 
+FetchContent_Declare(
+ httplib
+ GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+ GIT_TAG v0.20.1
+)
+
 set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
@@ -51,18 +57,38 @@ endif()
 FetchContent_MakeAvailable(webview)
 FetchContent_MakeAvailable(nlohmann_json)
 FetchContent_MakeAvailable(whisper)
+FetchContent_MakeAvailable(httplib)
 
 if(APPLE)
-add_executable(app-mvp src/main.cpp src/App.cpp src/WindowProtection.mm src/Stt.cpp)
+configure_file(src/Info.plist.in ${CMAKE_CURRENT_BINARY_DIR}/Info.plist @ONLY)
+add_executable(app-mvp MACOSX_BUNDLE src/main.cpp src/App.cpp src/WindowProtection.mm src/Stt.cpp)
+set_target_properties(app-mvp PROPERTIES
+  MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_BINARY_DIR}/Info.plist
+  MACOSX_BUNDLE_GUI_IDENTIFIER com.appmvp.desktop
+  MACOSX_BUNDLE_BUNDLE_NAME app-mvp
+)
 else()
 add_executable(app-mvp src/main.cpp src/App.cpp src/Stt.cpp)
 endif()
 
 if(APPLE)
-target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json "-framework AppKit" whisper)
+target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json httplib::httplib "-framework AppKit" "-framework AVFoundation" "-framework WebKit" whisper)
 else()
-target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json whisper)
+target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json httplib::httplib whisper)
 endif()
 
 set_property(TARGET app-mvp PROPERTY CXX_STANDARD 17)
 set_property(TARGET app-mvp PROPERTY CXX_STANDARD_REQUIRED ON)
+
+if(APPLE)
+add_custom_command(TARGET app-mvp POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  ${CMAKE_SOURCE_DIR}/src-ts/dist
+  $<TARGET_BUNDLE_CONTENT_DIR:app-mvp>/Resources/dist
+  COMMAND ${CMAKE_COMMAND} -E make_directory
+  $<TARGET_BUNDLE_CONTENT_DIR:app-mvp>/Resources/models
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+  ${CMAKE_SOURCE_DIR}/models/ggml-base.en.bin
+  $<TARGET_BUNDLE_CONTENT_DIR:app-mvp>/Resources/models/ggml-base.en.bin
+)
+endif()

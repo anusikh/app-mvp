@@ -13,6 +13,7 @@ declare global {
 function App() {
   const { start, stop, sendAudioData } = useMicRecorder();
   const [text, setText] = useState<string>('');
+  const [error, setError] = useState<string>('');
 
   // const callJsToCpp = async () => {
   //   const payload = JSON.stringify({ test: '123' });
@@ -23,6 +24,7 @@ function App() {
   useEffect(() => {
     window.testCppToJs = (data: { output: string }) => {
       setText(data['output']);
+      setError('');
     };
 
     return () => {
@@ -32,11 +34,45 @@ function App() {
 
   return (
     <div>
-      <button onClick={start}>start</button>
-      <button onClick={stop}>stop</button>
-      <button onClick={sendAudioData}>transcribe</button>
+      <button
+        onClick={async () => {
+          try {
+            setError('');
+            await start();
+          } catch (caughtError) {
+            setError(
+              caughtError instanceof Error ? caughtError.message : 'Failed to start microphone.'
+            );
+          }
+        }}
+      >
+        start
+      </button>
+      <button
+        onClick={() => {
+          setError('');
+          stop();
+        }}
+      >
+        stop
+      </button>
+      <button
+        onClick={async () => {
+          try {
+            setError('');
+            await sendAudioData();
+          } catch (caughtError) {
+            setError(
+              caughtError instanceof Error ? caughtError.message : 'Failed to transcribe audio.'
+            );
+          }
+        }}
+      >
+        transcribe
+      </button>
 
       <p>{text}</p>
+      <p>{error}</p>
     </div>
   );
 }
