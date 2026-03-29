@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+
 #include "Api.h"
 
 #ifdef __APPLE__
@@ -138,11 +139,8 @@ void App::setupJsToCpp()
                      std::string answer = response["choices"][0]["message"]["content"];
                      nlohmann::json resObj = {{"output", answer}};
 
-                     w.dispatch(
-                         [this, payload = std::string("window.testCppToJs(" + resObj.dump() + ")")]()
-                         {
-                           w.eval(payload);
-                         });
+                     w.dispatch([this, payload = std::string("window.testCppToJs(" + resObj.dump() +
+                                                             ")")]() { w.eval(payload); });
                    });
              }
 
