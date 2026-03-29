@@ -5,10 +5,12 @@
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "Api.h"
 
 #ifdef __APPLE__
 #include "WindowProtection.h"
@@ -61,8 +63,10 @@ std::vector<float> base64ToFloat32(const std::string& encoded)
 
 App::App() : w(true, nullptr), stt()
 {
-  setupWindow();
+  api = std::make_unique<Api>();
+
   setupJsToCpp();
+  setupWindow();
 
   stt.initWhisper(resolveModelPath());
 
@@ -78,6 +82,7 @@ App::App() : w(true, nullptr), stt()
 
 App::~App()
 {
+  joinRequestThreads();
   stopAssetServer();
 }
 
@@ -106,7 +111,40 @@ void App::setupJsToCpp()
              std::cout << result << std::endl;
              nlohmann::json obj = {{"output", result}};
 
-             w.eval("window.testCppToJs(" + obj.dump() + ")");
+             // w.eval("window.testCppToJs(" + obj.dump() + ")");
+
+             if (api == nullptr)
+             {
+               std::cout << "api is nullptr" << std::endl;
+               return obj.dump();
+             }
+
+             {
+               std::lock_guard<std::mutex> lock(requestThreadsMutex);
+               requestThreads.emplace_back(
+                   [this, transcript = std::move(result)]() mutable
+                   {
+                     nlohmann::json response;
+                     {
+                       std::lock_guard<std::mutex> apiLock(apiMutex);
+                       response = api->fetchAnswer(transcript);
+                     }
+
+                     if (!response.contains("choices") || response["choices"].empty())
+                     {
+                       return;
+                     }
+
+                     std::string answer = response["choices"][0]["message"]["content"];
+                     nlohmann::json resObj = {{"output", answer}};
+
+                     w.dispatch(
+                         [this, payload = std::string("window.testCppToJs(" + resObj.dump() + ")")]()
+                         {
+                           w.eval(payload);
+                         });
+                   });
+             }
 
              return obj.dump();
            }
@@ -130,7 +168,7 @@ void App::setupWindow()
     startAssetServer();
 
     w.set_title("app-mvp");
-    w.set_size(1200, 800, WEBVIEW_HINT_NONE);
+    w.set_size(500, 600, WEBVIEW_HINT_NONE);
 
     if (assetServerPort > 0)
     {
@@ -150,6 +188,23 @@ void App::setupWindow()
 void App::run()
 {
   w.run();
+}
+
+void App::joinRequestThreads()
+{
+  std::vector<std::thread> threads;
+  {
+    std::lock_guard<std::mutex> lock(requestThreadsMutex);
+    threads.swap(requestThreads);
+  }
+
+  for (auto& thread : threads)
+  {
+    if (thread.joinable())
+    {
+      thread.join();
+    }
+  }
 }
 
 std::string App::resolveFrontendRoot() const

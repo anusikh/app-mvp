@@ -13,6 +13,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+find_package(OpenSSL REQUIRED)
+
 include(FetchContent)
 FetchContent_Declare(
  webview
@@ -61,21 +63,23 @@ FetchContent_MakeAvailable(httplib)
 
 if(APPLE)
 configure_file(src/Info.plist.in ${CMAKE_CURRENT_BINARY_DIR}/Info.plist @ONLY)
-add_executable(app-mvp MACOSX_BUNDLE src/main.cpp src/App.cpp src/WindowProtection.mm src/Stt.cpp)
+add_executable(app-mvp MACOSX_BUNDLE src/main.cpp src/App.cpp src/WindowProtection.mm src/Stt.cpp src/Api.cpp)
 set_target_properties(app-mvp PROPERTIES
   MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_BINARY_DIR}/Info.plist
   MACOSX_BUNDLE_GUI_IDENTIFIER com.appmvp.desktop
   MACOSX_BUNDLE_BUNDLE_NAME app-mvp
 )
 else()
-add_executable(app-mvp src/main.cpp src/App.cpp src/Stt.cpp)
+add_executable(app-mvp src/main.cpp src/App.cpp src/Stt.cpp src/Api.cpp)
 endif()
 
 if(APPLE)
-target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json httplib::httplib "-framework AppKit" "-framework AVFoundation" "-framework WebKit" whisper)
+target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json httplib::httplib OpenSSL::SSL OpenSSL::Crypto "-framework AppKit" "-framework AVFoundation" "-framework WebKit" "-framework Security" whisper)
 else()
-target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json httplib::httplib whisper)
+target_link_libraries(app-mvp PRIVATE webview::core nlohmann_json::nlohmann_json httplib::httplib OpenSSL::SSL OpenSSL::Crypto whisper)
 endif()
+
+target_compile_definitions(app-mvp PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 
 set_property(TARGET app-mvp PROPERTY CXX_STANDARD 17)
 set_property(TARGET app-mvp PROPERTY CXX_STANDARD_REQUIRED ON)
