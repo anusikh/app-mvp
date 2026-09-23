@@ -22,10 +22,7 @@ PiMgr::~PiMgr()
   stop();
 }
 
-void PiMgr::print(const std::string& str)
-{
-  std::cout << str << std::flush;
-}
+void PiMgr::print(const std::string& str) {}
 
 void PiMgr::onSigInt(int)
 {
@@ -148,7 +145,7 @@ bool PiMgr::launchProcess(const std::string& exe, const std::vector<std::string>
     _exit(127);  // only reached if exec failed
   }
 
-  // parent 
+  // parent
   // Also set the pgid from our side to close the classic setpgid race.
   setpgid(pid, pid);
 
@@ -181,57 +178,11 @@ void PiMgr::handleEvent(const std::string& line)
   catch (const nlohmann::json::parse_error&)
   {
     emitEvent({{"type", "raw"}, {"line", line}});
-    print("[raw] " + line + "\n");
+    std::cout << "[raw] " + line + "\n" << std::flush;
     return;
   }
 
   emitEvent(ev);
-
-  const std::string type = ev.value("type", "");
-
-  if (type == "message_update")
-  {
-    nlohmann::json ame = nlohmann::json::object();
-    if (ev.contains("assistantMessageEvent") && ev["assistantMessageEvent"].is_object())
-    {
-      ame = ev["assistantMessageEvent"];
-    }
-    const std::string ameType = ame.value("type", "");
-    if (ameType == "text_delta")
-    {
-      print(ame.value("delta", ""));
-    }
-    else if (ameType == "toolcall_start")
-    {
-      print("\n\033[2m[tool: " + ame.value("toolName", "?") + "]\033[0m ");
-    }
-    // thinking_delta / text_end / toolcall_end / done: ignored for now
-  }
-  else if (type == "message_start")
-  {
-    print("\n[pi] ");
-  }
-  else if (type == "message_end")
-  {
-    print("\n");
-  }
-  else if (type == "response")
-  {
-    if (!ev.value("success", true))
-    {
-      print("\n[pi error] " + ev.value("error", "unknown error") + "\n");
-    }
-    // success responses stay silent; the reply streams as events
-  }
-  else if (type == "extension_ui_request")
-  {
-    // extensions can ask the user questions. A full client answers with
-    // {"type":"extension_ui_response","id":...}; we just surface it here.
-    print("\n[extension wants input: " + ev.value("method", "?") + "] " + ev.value("title", "") +
-          "\n");
-  }
-  // other events (agent_start, turn_end, tool_execution_*, queue_update,
-  // compaction_*, auto_retry_*, ...) can be handled as the UI grows.
 }
 
 void PiMgr::shutdownProcess(ProcessHandles& h)

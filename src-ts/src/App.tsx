@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import './App.css';
+import { MarkdownMessage } from './components/MarkdownMessage';
 import { useMicRecorder } from './hooks/useMicRecorder';
 
 type ChatMessage = {
@@ -37,8 +38,9 @@ function App() {
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState('');
   const [rawEvents, setRawEvents] = useState<string[]>([]);
+  const askPiAfterTranscriptionRef = useRef(false);
 
-  const sendPrompt = async (message: string) => {
+  const sendPrompt = useCallback(async (message: string) => {
     const trimmed = message.trim();
     if (!trimmed) return;
     if (!window.piPrompt) throw new Error('Pi bridge is unavailable.');
@@ -46,12 +48,20 @@ function App() {
     setMessages((current) => [...current, { role: 'user', content: trimmed }]);
     setInput('');
     await window.piPrompt(trimmed);
-  };
+  }, []);
 
   useEffect(() => {
     window.testCppToJs = (data: { output: string }) => {
-      setTranscript(data.output);
+      const transcribedMessage = data.output ?? '';
+      setTranscript(transcribedMessage);
       setError('');
+
+      if (!askPiAfterTranscriptionRef.current) return;
+      askPiAfterTranscriptionRef.current = false;
+
+      void sendPrompt(transcribedMessage).catch((caughtError) => {
+        setError(caughtError instanceof Error ? caughtError.message : 'Failed to send prompt.');
+      });
     };
 
     window.onPiEvent = (event: PiEvent) => {
@@ -107,75 +117,106 @@ function App() {
       window.testCppToJs = undefined;
       window.onPiEvent = undefined;
     };
-  }, []);
+  }, [sendPrompt]);
+
+  const hasMessages = messages.length > 0;
 
   return (
-    <div>
-      <div>
-        {messages.map((message, index) => (
-          <p key={index}>
-            <b>{message.role}: </b>
-            {message.content}
-          </p>
-        ))}
-      </div>
+    <main className='chat-shell'>
+      <section className='chat-card' aria-label='Pi chat'>
+        <header className='chat-header'>
+          <div>
+            <p className='eyebrow'>voice chat</p>
+            <h1>Talk with Pi</h1>
+          </div>
+          <button className='button button-ghost' type='button' onClick={() => window.piAbort?.()}>
+            Stop Pi
+          </button>
+        </header>
 
-      <form
-        onSubmit={async (event) => {
-          event.preventDefault();
-          try {
-            setError('');
-            await sendPrompt(input);
-          } catch (caughtError) {
-            setError(caughtError instanceof Error ? caughtError.message : 'Failed to send prompt.');
-          }
-        }}
-      >
-        <input value={input} onChange={(event) => setInput(event.target.value)} />
-        <button type="submit">send</button>
-        <button type="button" onClick={() => window.piAbort?.()}>
-          stop pi
-        </button>
-      </form>
+        <div className='chat-messages' aria-live='polite'>
+          {!hasMessages && (
+            <div className='empty-state'>
+              <span className='empty-icon' aria-hidden='true'>
+                ✦
+              </span>
+              <h2>Start a conversation</h2>
+              <p>Type a message or record your voice, then ask Pi.</p>
+            </div>
+          )}
 
-      <button onClick={start}>start mic</button>
-      <button onClick={stop}>stop mic</button>
-      <button
-        onClick={async () => {
-          try {
-            setError('');
-            await sendAudioData();
-          } catch (caughtError) {
-            setError(
-              caughtError instanceof Error ? caughtError.message : 'Failed to transcribe audio.'
-            );
-          }
-        }}
-      >
-        transcribe + ask pi
-      </button>
+          {messages.map((message, index) => (
+            <article key={`${message.role}-${index}`} className={`message message-${message.role}`}>
+              <div className='message-meta'>{message.role}</div>
+              <div className='message-bubble'>
+                <MarkdownMessage content={message.content} />
+              </div>
+            </article>
+          ))}
+        </div>
 
-      {transcript && <p>transcript: {transcript}</p>}
-      {error && <p>{error}</p>}
+        {error && <p className='status status-error'>{error}</p>}
+        {transcript && <p className='status status-transcript'>Transcript: {transcript}</p>}
 
-      <details open style={{ marginTop: 16 }}>
-        <summary>Raw Pi JSON events ({rawEvents.length})</summary>
-        <pre
-          style={{
-            maxHeight: 260,
-            overflow: 'auto',
-            textAlign: 'left',
-            whiteSpace: 'pre-wrap',
-            background: '#111',
-            color: '#0f0',
-            padding: 8,
-            fontSize: 11,
+        <form
+          className='composer'
+          onSubmit={async (event) => {
+            event.preventDefault();
+            try {
+              setError('');
+              await sendPrompt(input);
+            } catch (caughtError) {
+              setError(
+                caughtError instanceof Error ? caughtError.message : 'Failed to send prompt.'
+              );
+            }
           }}
         >
-          {rawEvents.join('\n')}
-        </pre>
+          <input
+            className='composer-input'
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder='Message Pi...'
+            aria-label='Message Pi'
+          />
+          <button className='button button-primary' type='submit' disabled={!input.trim()}>
+            Send
+          </button>
+        </form>
+
+        <div className='voice-controls' aria-label='Voice controls'>
+          <button className='button button-secondary' type='button' onClick={start}>
+            Start mic
+          </button>
+          <button className='button button-secondary' type='button' onClick={stop}>
+            Stop mic
+          </button>
+          <button
+            className='button button-accent'
+            type='button'
+            onClick={async () => {
+              try {
+                setError('');
+                askPiAfterTranscriptionRef.current = true;
+                await sendAudioData();
+              } catch (caughtError) {
+                askPiAfterTranscriptionRef.current = false;
+                setError(
+                  caughtError instanceof Error ? caughtError.message : 'Failed to transcribe audio.'
+                );
+              }
+            }}
+          >
+            Transcribe + ask Pi
+          </button>
+        </div>
+      </section>
+
+      <details className='debug-panel'>
+        <summary>Raw Pi JSON events ({rawEvents.length})</summary>
+        <pre>{rawEvents.join('\n')}</pre>
       </details>
-    </div>
+    </main>
   );
 }
 
