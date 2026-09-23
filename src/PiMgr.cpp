@@ -1,7 +1,5 @@
 #include "PiMgr.h"
 
-#include <sys/_types/_pid_t.h>
-#include <sys/_types/_ssize_t.h>
 #include <sys/signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -18,8 +16,6 @@
 #include <string>
 #include <thread>
 
-std::mutex PiMgr::printMutex;
-
 PiMgr::PiMgr() = default;
 PiMgr::~PiMgr()
 {
@@ -28,7 +24,6 @@ PiMgr::~PiMgr()
 
 void PiMgr::print(const std::string& str)
 {
-  std::lock_guard<std::mutex> lock(PiMgr::printMutex);
   std::cout << str << std::flush;
 }
 
@@ -381,111 +376,4 @@ bool PiMgr::abort()
 bool PiMgr::isRunning() const
 {
   return running;
-}
-
-int PiMgr::initPi()
-{
-  running = true;
-
-  // a dead pi shouldn't kill us with SIGPIPE, instead writeAll reports it
-  signal(SIGPIPE, SIG_IGN);
-
-  struct sigaction sa{};
-  sa.sa_handler = PiMgr::onSigInt;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = 0;
-  sigaction(SIGINT, &sa, nullptr);
-
-  ProcessHandles h;
-  std::cout << "[system] starting pi --mode rpc ...\n";
-
-  if (!launchProcess("pi",
-                     {"--mode", "rpc", "--no-session", "--provider", "openrouter", "--model",
-                      "qwen/qwen3.8-27b:free"},
-                     h))
-  {
-    std::cerr << "[system error] could not launch pi "
-                 "(is it installed and on your PATH?)\n";
-    return 1;
-  }
-
-  std::thread eventThread(
-      [&h, this]
-      {
-        PiMgr::readLines(h.outFd, [this](const std::string& line) { handleEvent(line); });
-        running = false;  // pi closed its stdout and exited
-      });
-
-  std::thread stderrThread(
-      [&h, this]
-      {
-        PiMgr::readLines(h.errFd,
-                         [](const std::string& line)
-                         {
-                           if (!line.empty())
-                           {
-                             std::cerr << "[pi stderr] " << line << "\n";
-                           }
-                         });
-      });
-
-  print(
-      "[system] ready. type a message, /stop to abort a running turn, "
-      "or 'exit' to quit.\n\n");
-
-  unsigned int reqId = 1;
-  while (running)
-  {
-    std::string input;
-    std::getline(std::cin, input);
-
-    if (!std::cin)
-    {
-      if (!running) break;        // interrupted by Ctrl+C
-      if (std::cin.eof()) break;  // Ctrl+D
-      std::cin.clear();           // transient failure; retry
-      continue;
-    }
-
-    if (input == "exit") break;
-    if (input.empty()) continue;
-
-    if (input == "/stop")
-    {
-      // Ask pi to abort the current turn; the chat stays open.
-      sendCommand(h, nlohmann::json{{"type", "abort"}});
-      continue;
-    }
-
-    nlohmann::json cmd = {
-        {"id", "req-" + std::to_string(reqId++)}, {"type", "prompt"}, {"message", input}};
-
-    if (!sendCommand(h, cmd))
-    {
-      print("\n[system error] lost the pi process (write failed).\n");
-      break;
-    }
-  }
-
-  print("\n[system] shutting down...\n");
-  shutdownProcess(h);
-
-  // Only now, with the child dead (pipe write ends closed => EOF), is it
-  // safe to join and then close the read descriptors.
-  if (eventThread.joinable()) eventThread.join();
-  if (stderrThread.joinable()) stderrThread.join();
-
-  if (h.outFd != -1)
-  {
-    close(h.outFd);
-    h.outFd = -1;
-  }
-  if (h.errFd != -1)
-  {
-    close(h.errFd);
-    h.errFd = -1;
-  }
-
-  print("[system] disconnected cleanly.\n");
-  return 0;
 }

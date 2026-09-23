@@ -25,9 +25,7 @@ struct ProcessHandles
 class PiMgr
 {
  private:
-  // inline init of static value
-  static inline std::atomic<bool> running{false};
-  static std::mutex printMutex;
+  std::atomic<bool> running{false};
 
   using EventCallback = std::function<void(const nlohmann::json&)>;
 
@@ -38,8 +36,8 @@ class PiMgr
   EventCallback eventCallback;
   unsigned int reqId = 1;
 
-  static void print(const std::string& str);
-  static void onSigInt(int);
+  void print(const std::string& str);
+  void onSigInt(int);
   bool waitWithTimeout(pid_t pid, int attempts100ms);
   bool writeAll(int fd, const std::string& data);
 
@@ -61,6 +59,4 @@ class PiMgr
   bool prompt(const std::string& message);
   bool abort();
   bool isRunning() const;
-
-  int initPi();
 };
