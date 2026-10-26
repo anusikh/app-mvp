@@ -1,4 +1,4 @@
-#include "PiMgr.h"
+#include "pi_mgr.h"
 
 #include <sys/signal.h>
 #include <sys/types.h>
@@ -16,6 +16,8 @@
 #include <string>
 #include <thread>
 
+namespace utils
+{
 PiMgr::PiMgr() = default;
 PiMgr::~PiMgr()
 {
@@ -328,3 +330,4 @@ bool PiMgr::isRunning() const
 {
   return running;
 }
+}  // namespace utils

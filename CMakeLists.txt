@@ -77,7 +77,7 @@ set_target_properties(app-mvp PROPERTIES
   MACOSX_BUNDLE_BUNDLE_NAME app-mvp
 )
 else()
-add_executable(app-mvp src/main.cpp src/App.cpp src/Stt.cpp src/Api.cpp)
+add_executable(app-mvp src/main.cpp src/app.cpp src/api.cpp src/utils/stt.cpp src/utils/pi_mgr.cpp)
 endif()
 
 if(APPLE)

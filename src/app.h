@@ -5,9 +5,9 @@
 #include <thread>
 #include <vector>
 
-#include "Api.h"
-#include "PiMgr.h"
-#include "Stt.h"
+#include "api.h"
+#include "utils/pi_mgr.h"
+#include "utils/stt.h"
 #include "webview/webview.h"
 
 namespace httplib
@@ -19,8 +19,8 @@ class App
 {
  private:
   webview::webview w;
-  Stt stt;
-  PiMgr piMgr;
+  utils::Stt stt;
+  utils::PiMgr piMgr;
   std::unique_ptr<httplib::Server> assetServer;
   std::unique_ptr<Api> api;
   std::vector<std::thread> requestThreads;

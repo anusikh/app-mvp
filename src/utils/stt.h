@@ -1,8 +1,11 @@
 #pragma once
+#include <string>
 #include <vector>
 
 #include "whisper.h"
 
+namespace utils
+{
 class Stt
 {
  private:
@@ -14,3 +17,4 @@ class Stt
   void initWhisper(const std::string& modelPath);
   std::string runWhisper(const std::vector<float>& audio);
 };
+}  // namespace utils

@@ -1,4 +1,4 @@
-#include "App.h"
+#include "app.h"
 
 #include <httplib.h>
 
@@ -12,10 +12,10 @@
 #include <utility>
 #include <vector>
 
-#include "Api.h"
+#include "api.h"
 
 #ifdef __APPLE__
-#include "WindowProtection.h"
+#include "window_protection.h"
 #endif
 #include "webview/webview.h"
 
@@ -63,6 +63,7 @@ std::vector<float> base64ToFloat32(const std::string& encoded)
   return audio;
 }
 
+// TODO: make this cross platform eventually
 #ifdef __APPLE__
 App::App() : w(true, createOverlayPanel(500, 600)), stt()
 #else

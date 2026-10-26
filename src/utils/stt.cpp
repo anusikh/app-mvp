@@ -1,4 +1,4 @@
-#include "Stt.h"
+#include "stt.h"
 
 #include <iostream>
 #include <ostream>
@@ -6,6 +6,8 @@
 
 #include "whisper.h"
 
+namespace utils
+{
 Stt::Stt() {}
 
 Stt::~Stt()
@@ -67,3 +69,4 @@ std::string Stt::runWhisper(const std::vector<float>& audio)
 
   return result;
 }
+}  // namespace utils

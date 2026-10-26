@@ -14,6 +14,8 @@
 #include <thread>
 #include <vector>
 
+namespace utils
+{
 struct ProcessHandles
 {
   int inFd = -1;   // parent writes here
@@ -60,3 +62,4 @@ class PiMgr
   bool abort();
   bool isRunning() const;
 };
+}  // namespace utils
