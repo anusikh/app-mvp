@@ -240,7 +240,7 @@ bool PiMgr::start(EventCallback callback)
 
   if (!launchProcess("pi",
                      {"--mode", "rpc", "--no-session", "--provider", "openrouter", "--model",
-                      "qwen/qwen3.8-27b:free"},
+                      "nvidia/nemotron-3.5-super-vl:free"},
                      handles))
   {
     running = false;

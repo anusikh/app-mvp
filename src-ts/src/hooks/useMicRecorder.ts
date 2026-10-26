@@ -1,94 +1,68 @@
-import { useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { arrayBufferToBase64, downSample, mergeBuffers } from '../helpers/audio';
 
-const BASE64_CHUNK_SIZE = 0x8000;
-
-const arrayBufferToBase64 = (buffer: ArrayBufferLike) => {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-
-  for (let index = 0; index < bytes.length; index += BASE64_CHUNK_SIZE) {
-    const chunk = bytes.subarray(index, index + BASE64_CHUNK_SIZE);
-    binary += String.fromCharCode(...chunk);
-  }
-
-  return btoa(binary);
-};
+const DEFAULT_SAMPLE_RATE = 48000;
 
 export const useMicRecorder = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const chunksRef = useRef<Float32Array[]>([]);
-  const sampleRateRef = useRef<number>(48000); // 48000 is the default in browser
+  const sampleRateRef = useRef<number>(DEFAULT_SAMPLE_RATE);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
-  const start = async () => {
+  const start = useCallback(async () => {
+    if (audioContextRef.current) return;
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
     const audioContext = new AudioContext();
     sampleRateRef.current = audioContext.sampleRate;
 
-    await audioContext.audioWorklet.addModule('./audioProcessor.js');
-    const source = audioContext.createMediaStreamSource(stream);
-    const workletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
+    try {
+      await audioContext.audioWorklet.addModule('./audioProcessor.js');
+      const source = audioContext.createMediaStreamSource(stream);
+      const workletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
 
-    workletNode.port.onmessage = (event) => {
-      const data = event.data;
-      chunksRef.current.push(data);
-    };
+      workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
+        chunksRef.current.push(event.data);
+      };
 
-    source.connect(workletNode);
-    workletNode.connect(audioContext.destination);
+      source.connect(workletNode);
+      workletNode.connect(audioContext.destination);
 
-    audioContextRef.current = audioContext;
-    workletNodeRef.current = workletNode;
-  };
-
-  const stop = () => {
-    audioContextRef.current?.close();
-  };
-
-  const mergeBuffers = (buffers: Float32Array[]) => {
-    const total = buffers.reduce((sum, b) => sum + b.length, 0);
-    const result = new Float32Array(total);
-
-    let offset = 0;
-    for (const b of buffers) {
-      result.set(b, offset);
-      offset += b.length;
+      streamRef.current = stream;
+      sourceNodeRef.current = source;
+      workletNodeRef.current = workletNode;
+      audioContextRef.current = audioContext;
+      setIsRecording(true);
+    } catch (error) {
+      stream.getTracks().forEach((track) => track.stop());
+      await audioContext.close();
+      throw error;
     }
+  }, []);
 
-    return result;
-  };
+  const stop = useCallback(async () => {
+    workletNodeRef.current?.disconnect();
+    sourceNodeRef.current?.disconnect();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
 
-  const downSample = (
-    buffer: Float32Array,
-    inputRate: number,
-    targetRate: number = 16000
-  ): Float32Array => {
-    if (inputRate === targetRate) return buffer;
+    const audioContext = audioContextRef.current;
 
-    const ratio = inputRate / targetRate;
-    const newLength = Math.round(buffer.length / ratio);
-    const result = new Float32Array(newLength);
+    audioContextRef.current = null;
+    streamRef.current = null;
+    sourceNodeRef.current = null;
+    workletNodeRef.current = null;
+    setIsRecording(false);
 
-    for (let i = 0; i < newLength; i++) {
-      const start = Math.floor(i * ratio);
-      const end = Math.floor((i + 1) * ratio);
-
-      let sum = 0;
-      let count = 0;
-
-      for (let j = start; j < end && j < buffer.length; j++) {
-        sum += buffer[j];
-        count++;
-      }
-
-      result[i] = sum / count;
+    if (audioContext && audioContext.state !== 'closed') {
+      await audioContext.close();
     }
+  }, []);
 
-    return result;
-  };
-
-  const sendAudioData = async () => {
+  const sendAudioData = useCallback(async () => {
     if (!window.stt) {
       throw new Error('Speech-to-text bridge is unavailable.');
     }
@@ -106,8 +80,14 @@ export const useMicRecorder = () => {
     const downsampled = downSample(merged, sampleRateRef.current, 16000);
     chunksRef.current = [];
     const base64 = arrayBufferToBase64(downsampled.buffer);
-    await window.stt(base64);
-  };
 
-  return { start, stop, sendAudioData };
+    setIsTranscribing(true);
+    try {
+      await window.stt(base64);
+    } finally {
+      setIsTranscribing(false);
+    }
+  }, []);
+
+  return { start, stop, sendAudioData, isRecording, isTranscribing };
 };

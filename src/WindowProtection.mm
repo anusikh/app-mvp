@@ -2,6 +2,9 @@
 #import <AVFoundation/AVFoundation.h>
 #import <WebKit/WebKit.h>
 
+#include <functional>
+#include <utility>
+
 #include <string>
 
 @interface AppMicPermissionDelegate : NSObject <WKUIDelegate>
@@ -60,6 +63,15 @@ void setWindowProtected(void* windowPtr) {
 	}
 }
 
+void setAlwaysOnTop(void* windowPtr, bool onTop) {
+    @autoreleasepool {
+      NSWindow* nsWindow = (__bridge NSWindow*)windowPtr;
+      [nsWindow setLevel:(onTop ? NSFloatingWindowLevel : NSNormalWindowLevel)];
+      [nsWindow setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
+                                    NSWindowCollectionBehaviorFullScreenAuxiliary];
+    }
+}
+
 void configureWindowForMicrophone(void* windowPtr)
 {
   @autoreleasepool
@@ -93,5 +105,97 @@ std::string getBundleResourcePath()
     }
 
     return std::string(resourcePath.UTF8String);
+  }
+}
+
+@interface OverlayPanel : NSPanel
+@end
+
+@implementation OverlayPanel
+- (BOOL)canBecomeKeyWindow { return YES; }
+- (BOOL)canBecomeMainWindow { return NO; }
+@end
+
+namespace {
+bool gTerminating = false;
+std::function<void()> gCloseHandler;
+}
+
+@interface OverlayPanelDelegate : NSObject <NSWindowDelegate>
+@end
+
+@implementation OverlayPanelDelegate
+
+- (void)windowWillClose:(NSNotification*)notification
+{
+  (void)notification;
+  if (gTerminating) { return; }
+  gTerminating = true;
+
+  if (gCloseHandler) {
+    gCloseHandler();            // graceful: stops the run loop, lets ~App run
+  } else {
+    [NSApp terminate:nil];      // fallback: exit() straight away
+  }
+}
+
+@end
+
+void setOverlayPanelCloseHandler(void* windowPtr, std::function<void()> handler)
+{
+  (void)windowPtr;
+  gCloseHandler = std::move(handler);
+}
+
+void configureOverlayPanel(void* windowPtr)
+{
+  @autoreleasepool
+  {
+    NSPanel* panel = (NSPanel*)windowPtr;
+
+    // re-assert the mask: webview's set_size() overwrites it
+    [panel setStyleMask:(NSWindowStyleMaskTitled |
+                          NSWindowStyleMaskClosable |
+                          NSWindowStyleMaskResizable |
+                          NSWindowStyleMaskNonactivatingPanel)];
+
+    [panel setFloatingPanel:YES];
+    [panel setBecomesKeyOnlyIfNeeded:NO];   // take keys even when not active
+    [panel setHidesOnDeactivate:NO];
+    [panel setReleasedWhenClosed:NO];
+    [panel setLevel:NSFloatingWindowLevel];
+    [panel setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
+                                 NSWindowCollectionBehaviorFullScreenAuxiliary];
+    [panel setSharingType:NSWindowSharingNone];
+  }
+}
+
+void* createOverlayPanel(int width, int height)
+{
+  @autoreleasepool
+  {
+    [NSApplication sharedApplication];
+    // No Dock icon, no Cmd-Tab entry: the app behaves as a background HUD
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+
+    OverlayPanel* panel = [[OverlayPanel alloc]
+        initWithContentRect:NSMakeRect(0, 0, width, height)
+                  styleMask:(NSWindowStyleMaskTitled |
+                             NSWindowStyleMaskClosable |
+                             NSWindowStyleMaskResizable |
+                             NSWindowStyleMaskNonactivatingPanel)
+                    backing:NSBackingStoreBuffered
+                      defer:NO];
+
+    [panel setTitle:@"app-mvp"];
+    [panel center];
+    [panel makeKeyAndOrderFront:nil];
+    configureOverlayPanel((__bridge void*)panel);
+    static OverlayPanelDelegate* delegate = nil;
+    if (delegate == nil) {
+      delegate = [[OverlayPanelDelegate alloc] init];
+    }
+    [panel setDelegate:delegate];
+    return (__bridge void*)panel;
   }
 }

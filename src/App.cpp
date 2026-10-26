@@ -63,7 +63,11 @@ std::vector<float> base64ToFloat32(const std::string& encoded)
   return audio;
 }
 
+#ifdef __APPLE__
+App::App() : w(true, createOverlayPanel(500, 600)), stt()
+#else
 App::App() : w(true, nullptr), stt()
+#endif
 {
   api = std::make_unique<Api>();
 
@@ -79,11 +83,15 @@ App::App() : w(true, nullptr), stt()
         w.dispatch([this, code = std::move(code)]() { w.eval(code); });
       });
 
+  // TODO: make this cross platform eventually
 #ifdef __APPLE__
   auto windowResult = w.window();
   if (windowResult.ok())
   {
+    configureOverlayPanel(windowResult.value());
+    setOverlayPanelCloseHandler(windowResult.value(), [this]() { (void)w.terminate(); });
     setWindowProtected(windowResult.value());
+    setAlwaysOnTop(windowResult.value(), true);
     configureWindowForMicrophone(windowResult.value());
   }
 #endif
